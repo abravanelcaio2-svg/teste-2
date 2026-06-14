@@ -10,7 +10,7 @@ async function checkAdmin() {
 }
 
 const TIPOS_ACEITOS = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
-const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
+const MAX_BYTES = 5 * 1024 * 1024
 
 export async function POST(req: NextRequest) {
   if (!await checkAdmin()) return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 })
@@ -21,27 +21,12 @@ export async function POST(req: NextRequest) {
     const tipo = (formData.get('tipo') as string) || 'produto'
 
     if (!file) return NextResponse.json({ erro: 'Nenhum arquivo enviado.' }, { status: 400 })
+    if (!TIPOS_ACEITOS.includes(file.type)) return NextResponse.json({ erro: 'Tipo não aceito.' }, { status: 400 })
+    if (file.size > MAX_BYTES) return NextResponse.json({ erro: 'Arquivo muito grande.' }, { status: 400 })
 
-    if (!TIPOS_ACEITOS.includes(file.type)) {
-      return NextResponse.json({ erro: 'Tipo não aceito. Use JPG, PNG, WebP ou SVG.' }, { status: 400 })
-    }
-
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json({ erro: 'Arquivo muito grande (máx 5 MB).' }, { status: 400 })
-    }
-
-    const privateKey = process.env.IMAGEKIT_PRIVATE_KEY
-    const urlEndpoint = process.env.IMAGEKIT_URL_ENDPOINT
-
-    if (!privateKey || !urlEndpoint) {
-      console.error('[Upload] IMAGEKIT_PRIVATE_KEY ou IMAGEKIT_URL_ENDPOINT não definidos')
-      return NextResponse.json({ erro: 'Configuração de upload ausente.' }, { status: 500 })
-    }
-
-    // Converte para base64 com prefixo correto
+    const privateKey = 'private_WYvA79qVFEFmAd6LkyDDvc/0TNA='
     const buffer = Buffer.from(await file.arrayBuffer())
     const base64 = `data:${file.type};base64,${buffer.toString('base64')}`
-
     const folder = tipo === 'logo' ? '/logo' : tipo === 'banner' ? '/banners' : '/produtos'
     const fileName = `${Date.now()}-${file.name.replace(/\s/g, '_')}`
 
