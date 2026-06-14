@@ -136,6 +136,7 @@ export default function ProdutoClient({ produto, relacionados }: { produto: Prod
   const tabs: ('descricao' | 'ficha' | 'avaliacoes')[] = ['descricao', 'ficha', 'avaliacoes']
 
   return (
+    <>
     <div className="container">
 
       {/* Breadcrumb */}
