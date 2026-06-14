@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
+import { useState, useEffect } from 'react'
 
 const links = [
   { href: '/admin',            label: 'Dashboard',     icon: '📊' },
@@ -17,13 +18,43 @@ const links = [
 
 export function AdminNav() {
   const pathname = usePathname()
+  const [open, setOpen] = useState(false)
 
-  return (
-    <aside className="w-64 min-h-screen bg-gray-900 text-white flex flex-col">
+  // Fecha o menu ao trocar de página no mobile
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
+
+  // Fecha ao clicar fora (overlay)
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      const sidebar = document.getElementById('admin-sidebar')
+      if (sidebar && !sidebar.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const navContent = (
+    <aside
+      id="admin-sidebar"
+      className="w-64 min-h-screen bg-gray-900 text-white flex flex-col"
+    >
       {/* Logo / título */}
-      <div className="px-6 py-5 border-b border-gray-700">
-        <p className="text-xs text-gray-400 uppercase tracking-widest">Painel</p>
-        <p className="text-lg font-bold mt-1">Admin</p>
+      <div className="px-6 py-5 border-b border-gray-700 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-widest">Painel</p>
+          <p className="text-lg font-bold mt-1">Admin</p>
+        </div>
+        {/* Botão fechar — só no mobile */}
+        <button
+          onClick={() => setOpen(false)}
+          className="md:hidden text-gray-400 hover:text-white text-2xl leading-none"
+          aria-label="Fechar menu"
+        >
+          ✕
+        </button>
       </div>
 
       {/* Links de navegação */}
@@ -68,5 +99,46 @@ export function AdminNav() {
         </button>
       </div>
     </aside>
+  )
+
+  return (
+    <>
+      {/* ── Desktop: sidebar fixa ── */}
+      <div className="hidden md:flex">
+        {navContent}
+      </div>
+
+      {/* ── Mobile: botão hamburguer + drawer ── */}
+      <div className="md:hidden">
+        {/* Barra superior mobile */}
+        <div className="fixed top-0 left-0 right-0 z-40 flex items-center gap-3 bg-gray-900 text-white px-4 py-3 shadow-lg">
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="Abrir menu"
+            className="text-2xl leading-none"
+          >
+            ☰
+          </button>
+          <span className="font-bold text-base">Admin</span>
+        </div>
+
+        {/* Espaço para não sobrepor o conteúdo */}
+        <div className="h-14" />
+
+        {/* Overlay escuro */}
+        {open && (
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)} />
+        )}
+
+        {/* Drawer deslizante */}
+        <div
+          className={`fixed top-0 left-0 h-full z-50 transition-transform duration-300 ${
+            open ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          {navContent}
+        </div>
+      </div>
+    </>
   )
 }
