@@ -179,12 +179,6 @@ export default function CheckoutPage() {
       setPedidoId(pid)
 
       // 2. Processa pagamento
-      // ── MOCK: simula processamento por 20s e retorna erro ──────────────
-      await new Promise(resolve => setTimeout(resolve, 20000))
-      setLoading(false)
-      setErro('Não foi possível finalizar sua compra. Tente novamente em alguns minutos — servidores sobrecarregados.')
-      return
-      // ── FIM MOCK ────────────────────────────────────────────────────────
 
       if (pagamento === 'PIX') {
         const pixRes = await fetch('/api/pagamento/pix', {
