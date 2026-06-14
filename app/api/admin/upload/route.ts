@@ -1,81 +1,98 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import { requireAuth } from '@/lib/auth'
 
-async function checkAdmin() {
-  const s = await getServerSession(authOptions)
-  return s?.user && (s.user as any).role === 'ADMIN'
-}
+export const dynamic = 'force-dynamic'
 
-const TIPOS_ACEITOS = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
-const MAX_BYTES     = 5 * 1024 * 1024 // 5 MB
+const schema = z.object({ aberturaId: z.string() })
 
 export async function POST(req: NextRequest) {
-  if (!await checkAdmin()) return NextResponse.json({ erro: 'Acesso negado.' }, { status: 403 })
-
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const tipo = (formData.get('tipo') as string) || 'produto' // 'logo' | 'produto' | 'banner'
+    const authUser = await requireAuth(req)
+    const { aberturaId } = schema.parse(await req.json())
 
-    if (!file) return NextResponse.json({ erro: 'Nenhum arquivo enviado.' }, { status: 400 })
+    // Valida abertura
+    const abertura = await prisma.caixaAbertura.findUnique({
+      where: { id: aberturaId },
+      include: {
+        caixa: {
+          include: {
+            skinForcada: true,
+            skins: {
+              include: { skin: true },
+            },
+          },
+        },
+      },
+    })
 
-    if (!TIPOS_ACEITOS.includes(file.type)) {
-      return NextResponse.json(
-        { erro: 'Tipo não aceito. Use JPG, PNG, WebP ou SVG.' },
-        { status: 400 }
-      )
+    if (!abertura) return NextResponse.json({ error: 'Abertura não encontrada' }, { status: 404 })
+    if (abertura.userId !== authUser.sub) return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
+    if (!abertura.pago && !abertura.free) return NextResponse.json({ error: 'Abertura não paga' }, { status: 400 })
+    if (abertura.abertaEm) return NextResponse.json({ error: 'Caixa já aberta' }, { status: 400 })
+
+    // Determina skin: forçada (sorteio entre fixas) ou sorteio por peso
+    let skinGanha: { id: string; [key: string]: unknown } | null = null
+    const skinsForcadasIds: string[] = abertura.caixa.skinsForcadasIds
+      ? JSON.parse(abertura.caixa.skinsForcadasIds as string)
+      : []
+
+    if (skinsForcadasIds.length > 0) {
+      // Sorteia aleatoriamente entre as skins fixas cadastradas
+      const idSorteado = skinsForcadasIds[Math.floor(Math.random() * skinsForcadasIds.length)]
+      const skinSorteada = await prisma.skin.findUnique({ where: { id: idSorteado } })
+      skinGanha = skinSorteada ?? abertura.caixa.skinForcada
+    } else if (abertura.caixa.skinForcada) {
+      skinGanha = abertura.caixa.skinForcada
+    } else {
+      const pool = abertura.caixa.skins
+      if (!pool.length) return NextResponse.json({ error: 'Caixa sem skins cadastradas' }, { status: 400 })
+
+      // Sorteio ponderado por peso
+      const totalPeso = pool.reduce((sum, cs) => sum + cs.peso, 0)
+      let rnd = Math.random() * totalPeso
+      let escolhido = pool[pool.length - 1]
+      for (const cs of pool) {
+        rnd -= cs.peso
+        if (rnd <= 0) { escolhido = cs; break }
+      }
+      skinGanha = escolhido.skin
     }
 
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json({ erro: 'Arquivo muito grande (máx 5 MB).' }, { status: 400 })
+    // ✅ FIX: Guard explícito — garante ao TypeScript (e em runtime) que skinGanha não é null
+    if (!skinGanha) {
+      return NextResponse.json({ error: 'Skin não encontrada para esta caixa' }, { status: 400 })
     }
 
-    const ext =
-      file.type === 'image/png'     ? 'png'  :
-      file.type === 'image/webp'    ? 'webp' :
-      file.type === 'image/svg+xml' ? 'svg'  : 'jpg'
+    // Calcula holdUntil: 24h para saque via bot
+    const holdUntil = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
-    const filename  = `${uuidv4()}.${ext}`
-    const uploadDir = join(process.cwd(), 'public', 'uploads')
+    // Registra abertura + cria item no inventário
+    const [aberturaAtualizada, inventarioItem] = await prisma.$transaction([
+      prisma.caixaAbertura.update({
+        where: { id: aberturaId },
+        data:  { skinGanhaId: skinGanha.id, abertaEm: new Date() },
+      }),
+      prisma.userInventory.create({
+        data: {
+          userId:    authUser.sub,
+          skinId:    skinGanha.id,
+          status:    'HOLD',
+          holdUntil,
+          origem:    `caixa:${abertura.caixaId}`,
+        },
+      }),
+    ])
 
-    await mkdir(uploadDir, { recursive: true })
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await writeFile(join(uploadDir, filename), buffer)
-
-    const url = `/uploads/${filename}`
-
-    // Persiste no banco para logo e banner
-    if (tipo === 'logo') {
-      await prisma.siteConfig.upsert({
-        where:  { key: 'logo_url' },
-        update: { value: url },
-        create: { key: 'logo_url', value: url },
-      })
-    }
-
-    // Banner: persiste na lista de banners
-    if (tipo === 'banner') {
-      const atual = await prisma.siteConfig.findUnique({ where: { key: 'banner_imagens' } })
-      let banners: string[] = []
-      try { banners = JSON.parse(atual?.value || '[]') } catch {}
-      if (!Array.isArray(banners)) banners = []
-      banners.push(url)
-      await prisma.siteConfig.upsert({
-        where:  { key: 'banner_imagens' },
-        update: { value: JSON.stringify(banners) },
-        create: { key: 'banner_imagens', value: JSON.stringify(banners) },
-      })
-    }
-
-    return NextResponse.json({ url })
-  } catch (error) {
-    console.error('[POST /api/admin/upload]', error)
-    return NextResponse.json({ erro: 'Erro no upload.' }, { status: 500 })
+    return NextResponse.json({
+      ok:    true,
+      skin:  skinGanha,
+      inventarioId: inventarioItem.id,
+      holdUntil: holdUntil.toISOString(),
+    })
+  } catch (err: any) {
+    console.error('Abrir caixa error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
