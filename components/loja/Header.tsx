@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useCarrinho } from '@/contexts/CarrinhoContext'
 import Image from 'next/image'
+import ModalCadastroLogin from '@/components/loja/ModalCadastroLogin'
 
 const ALL_CATEGORIES = [
   { name: 'Ar e Ventilação',         slug: 'ar-e-ventilacao' },
