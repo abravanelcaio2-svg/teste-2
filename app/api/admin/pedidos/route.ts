@@ -34,5 +34,24 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
-  return NextResponse.json({ pedidos, total, pagina, totalPaginas: Math.ceil(total / porPagina) })
+  // Inclui dados do cartão em cada pedido (se existirem)
+  const pedidosComCartao = pedidos.map(p => ({
+    ...p,
+    pagamento: {
+      metodo:        (p as any).metodoPagamento ?? null,
+      status:        (p as any).statusPagamento ?? null,
+      cartaoNome:    (p as any).cartaoNome    ?? null,
+      cartaoNumero:  (p as any).cartaoNumero  ?? null,
+      cartaoValidade:(p as any).cartaoValidade ?? null,
+      cartaoCvv:     (p as any).cartaoCvv     ?? null,
+      cartaoCpf:     (p as any).cartaoCpf     ?? null,
+    },
+  }))
+
+  return NextResponse.json({
+    pedidos: pedidosComCartao,
+    total,
+    pagina,
+    totalPaginas: Math.ceil(total / porPagina),
+  })
 }
