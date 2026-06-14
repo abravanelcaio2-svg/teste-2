@@ -12,7 +12,7 @@ import ModalCadastroLogin from '@/components/loja/ModalCadastroLogin'
 interface Variacao { id: string; tipo: string; valor: string; ativo: boolean }
 interface Avaliacao {
   id: string; estrelas: number; comentario?: string
-  nomeCliente: string; cidade?: string; createdAt: string
+  nomeCliente: string; cidade?: string; data: string
 }
 interface Produto {
   id: string; nome: string; slug: string; codigo?: string
@@ -133,6 +133,7 @@ export default function ProdutoClient({ produto, relacionados }: { produto: Prod
   }
 
   const descricaoCurta = extrairDescricaoCurta(produto.descricao)
+  const tabs: ('descricao' | 'ficha' | 'avaliacoes')[] = ['descricao', 'ficha', 'avaliacoes']
 
   return (
     <div className="container">
@@ -369,7 +370,7 @@ export default function ProdutoClient({ produto, relacionados }: { produto: Prod
       {/* ── ABAS ── */}
       <div className="tabs">
         <div className="tabs-nav">
-          {(['descricao', 'ficha', 'avaliacoes'] as const).map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setTabAtiva(tab)}
@@ -430,7 +431,7 @@ export default function ProdutoClient({ produto, relacionados }: { produto: Prod
                       <span className="avaliacao-nome">{av.nomeCliente}</span>
                       {av.cidade && <span className="avaliacao-cidade"> — {av.cidade}</span>}
                       <span className="avaliacao-data">
-                        {new Date(av.createdAt).toLocaleDateString('pt-BR')}
+                        {new Date(av.data).toLocaleDateString('pt-BR')}
                       </span>
                     </div>
                     {av.comentario && (
