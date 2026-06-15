@@ -3,16 +3,16 @@ services:
   # ── Banco de dados ──────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: ecommerce_postgres
+    container_name: loja_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${POSTGRES_USER:-ecommerce}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senha123}
-      POSTGRES_DB:       ${POSTGRES_DB:-ecommerce}
+      POSTGRES_USER:     ${POSTGRES_USER:-loja}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Loja2025@Prod}
+      POSTGRES_DB:       ${POSTGRES_DB:-loja}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecommerce} -d ${POSTGRES_DB:-ecommerce}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loja} -d ${POSTGRES_DB:-loja}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,18 +24,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ecommerce_app
+    container_name: loja_app
     restart: unless-stopped
     environment:
-      DATABASE_URL:      postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-senha123}@postgres:5432/${POSTGRES_DB:-ecommerce}
-      NEXTAUTH_SECRET:   ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL:      ${NEXTAUTH_URL:-http://localhost}
-      ASAAS_API_KEY:     ${ASAAS_API_KEY:-}
-      ASAAS_ENV:         ${ASAAS_ENV:-sandbox}
+      DATABASE_URL:    postgresql://${POSTGRES_USER:-loja}:${POSTGRES_PASSWORD:-Loja2025@Prod}@postgres:5432/${POSTGRES_DB:-loja}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL:    ${NEXTAUTH_URL:-https://pietset.com}
+      ASAAS_API_KEY:   ${ASAAS_API_KEY:-}
+      ASAAS_ENV:       ${ASAAS_ENV:-sandbox}
     volumes:
-      # Bind mount: arquivos ficam no host, sobrevivem a rebuilds
-      # O nginx também acessa essa mesma pasta diretamente
-      - /www/wwwroot/ecommerce/public/uploads:/app/public/uploads
+      - /www/wwwroot/loja/public/uploads:/app/public/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,10 +41,10 @@ services:
       - internal
       - external
 
-  # ── Nginx (reverse proxy + SSL-ready) ──────────────────────
+  # ── Nginx (reverse proxy + SSL) ─────────────────────────────
   nginx:
     image: nginx:1.27-alpine
-    container_name: ecommerce_nginx
+    container_name: loja_nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -54,8 +52,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
-      # Mesma pasta de uploads — nginx serve estático sem passar pelo Next.js
-      - /www/wwwroot/ecommerce/public/uploads:/www/uploads:ro
+      - /www/wwwroot/loja/public/uploads:/www/uploads:ro
     depends_on:
       - app
     networks:
@@ -63,7 +60,6 @@ services:
 
 volumes:
   postgres_data:
-  # uploads_data removido — substituído por bind mount acima
 
 networks:
   internal:
